@@ -22,20 +22,20 @@ $(OBJ_DIR):
 
 $(NAME): $(OBJ)
 	ar -cq $@ $^
-	$(CC) main.c -I includes $@ -o dynarr
+	$(CC) main.c $(FLAGS:-c=) $@ -o dynarr
 
 re: fclean all
 
-d: FLAGS = -g -fsanitize=address
+d: FLAGS += -g -fsanitize=address
 d: all
 
-s: FLAGS = -g
+s: FLAGS += -g
 s: all
 
-red: FLAGS = -g -fsanitize=address
+red: FLAGS += -g -fsanitize=address
 red: re
 
-res: FLAGS = -g
+res: FLAGS += -g
 res: re
 
 fclean:

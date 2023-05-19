@@ -64,10 +64,14 @@ DECLARE_DYNLOAD(long double, dynloadld);
 DECLARE_DYNLOAD(long double*, dynloadldp);
 
 dynarr*			dynalloc(int size, unsigned int typesize);
+dynarr*			dynallocstr(char* str);
 dynarr*			dyn_realloc(dynarr* arr, unsigned int size);
-void			dynsetval(dynarr* arr, long long value, unsigned long pos);
-void			dynset(dynarr* arr, void* value_addr, unsigned long len, unsigned long pos);
+int				dyninsert(dynarr** dst, void* value_addr, unsigned long pos);
+void			dynsetval(dynarr* arr, char value, unsigned long pos);
+void			dynset(dynarr* arr, void* value_addr, unsigned long pos);
 dynarr*			dyncopy(dynarr* arr);
+int				dynjoin(dynarr** a1, dynarr* a2);
+int				dynjoinptr(dynarr** a1, void* a2, unsigned long len);
 void			dyn_free(dynarr *tofree);
 
 #endif

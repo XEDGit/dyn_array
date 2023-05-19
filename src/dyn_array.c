@@ -61,16 +61,16 @@ static void	*dyn_memmove(void *dest, void *src, size_t len)
 }
 
 /// @brief Allocates new dynamic array
-/// @param size 
-/// @param typesize 
-/// @return 
+/// @param size number of elements in the array
+/// @param typesize size in bytes of a single element, use sizeof()
+/// @return Returns new array on success, 0 on failure
 dynarr*	dynalloc(int size, unsigned int typesize)
 {
 	dynarr*	ret = malloc(sizeof(dynarr));
 	if (!ret)
 		return (NULL);
 	ret->size = typesize;
-	ret->ptr = malloc(typesize * size);
+	ret->ptr = malloc(typesize * (size + 1));
 	if (!ret->ptr)
 		return (free(ret), NULL);
 	ret->length = size;
@@ -83,38 +83,80 @@ dynarr*	dynalloc(int size, unsigned int typesize)
 /// @brief Reallocates arr with new length and frees arr
 /// @param arr original array, will be freed by this function
 /// @param length new length of the array
-/// @return Resized arr, on fail it returns 0, sets errno and frees arr
+/// @return Resized arr, on fail it returns 0 and sets errno and frees arr
 dynarr*	dyn_realloc(dynarr* arr, unsigned int length)
 {
 	dynarr* ret = dynalloc(length, arr->size);
 	if (!ret)
 		return (dyn_free(arr), (dynarr *)0);
-	dyn_memmove(ret->ptr, arr->ptr, arr->size * arr->length);
+	ret->cursor = arr->cursor;
+	dyn_memmove(ret->ptr, arr->ptr, arr->size * arr->cursor);
 	dyn_free(arr);
 	return ret;
 }
 
-/// @brief Acts as `arr[pos] = value` for constant values, use dynset for pointers
+/// @brief Adds a2 at the end of a1, dynamic arrays MUST be of the same type
+/// @return 1 on success, 0 on fail and sets errno
+int	dynjoin(dynarr** a1, dynarr* a2)
+{
+	int len = (*a1)->cursor + a2->length;
+	dynarr*	tmp = dyn_realloc(*a1, len);
+	if (!tmp)
+		return (0);
+	dynset(tmp, a2->ptr, a2->length, tmp->cursor);
+	tmp->cursor = len;
+	*a1 = tmp;
+}
+
+/// @brief Adds (len * a1.size) elements from a2 at the end of a1, values inside void * MUST be of the same datatype of a1. If len is 0 dynjoin will expect a null-terminated string as a2 and will fail if a1 is not of type char
+/// @return 1 on success and a1 is reallocated, 0 on fail
+int	dynjoinptr(dynarr** a1, void* a2, unsigned long len)
+{
+	if (!len)
+	{
+		if ((*a1)->size != sizeof(char))
+			return (0);
+		char* s2 = a2;
+		while (s2[len])
+			len++;
+	}
+	dynarr*	tmp = dyn_realloc(*a1, (*a1)->cursor + (len * (*a1)->size));
+	if (!tmp)
+		return (0);
+	dynset(tmp, a2, len, tmp->cursor);
+	tmp->cursor += len;
+	*a1 = tmp;
+}
+
+static void	dyn_memset(void *dst, unsigned char value, unsigned long len)
+{
+	char *s = dst;
+	while (len--)
+		s[len] = value;
+}
+
+/// @brief Acts as `arr[pos] = value` for constant values, use dynset for pointers, does not reallocate
 /// @param arr Allocated dynarr*
 /// @param value value to write
 /// @param pos index where to write
-inline void	dynsetval(dynarr* arr, long long value, unsigned long pos)
+inline void	dynsetval(dynarr* arr, char value, unsigned long pos)
 {
 	if (pos >= arr->length)
 		return ;
-	dyn_memmove(dynload(arr, pos), &value, arr->size);
+	if (arr->cursor < pos)
+		arr->cursor = pos;
+	dyn_memset(dynload(arr, pos), value, arr->size);
 }
 
-/// @brief Copies `len * size of arr data type` bytes from value_addr to arr[pos], use dynsetval for constant values
-/// @param arr 
-/// @param value_addr 
-/// @param len 
-/// @param pos 
-inline void	dynset(dynarr* arr, void* value_addr, unsigned long len, unsigned long pos)
+/// @brief Copies `len * size of arr data type` bytes from value_addr to arr[pos], use dynsetval for a constant value, does not reallocate
+/// @param arr Allocated dynarr*
+/// @param value value to write
+/// @param pos index where to write
+inline void	dynset(dynarr* arr, void* value_addr, unsigned long pos)
 {
 	if (pos >= arr->length)
 		return ;
-	dyn_memmove(dynload(arr, pos), value_addr, (arr->size * len));
+	dyn_memmove(dynload(arr, pos), value_addr, arr->size);
 }
 
 /// @brief Makes deep-copy of arr
@@ -126,6 +168,22 @@ dynarr*	dyncopy(dynarr* arr)
 	if (!ret)
 		return ((dynarr *)0);
 	dyn_memmove(ret->ptr, arr->ptr, arr->size * arr->length);
+	ret->cursor = arr->cursor;
+	return ret;
+}
+
+/// @brief Creates an instance of dynarr containing a string
+/// @param str_addr null-terminated source string
+/// @return dynarr pointer to a new dynamic array containing str
+dynarr*	dynallocstr(char* str)
+{
+	int		len = 0;
+	while (str[len]) len++;
+	dynarr*	ret = dynalloc(len, sizeof(char));
+	if (!ret)
+		return ((dynarr *)0);
+	dyn_memmove(ret->ptr, str, len);
+	ret->cursor = len;
 	return ret;
 }
 
@@ -134,9 +192,28 @@ dynarr*	dyncopy(dynarr* arr)
 /// @param value_addr address pointing to the values to be copied
 /// @param pos position in the array to insert the element
 /// @return returns a positive value on success, 0 on error and sets errno
-int	dynadd(dynarr* dst, void* value_addr, unsigned long pos)
+int	dyninsert(dynarr** dst, void* value_addr, unsigned long pos)
 {
-	return 0;
+	int		reall = ((*dst)->cursor == (*dst)->length);
+	dynarr* tmp = 0;
+	if (reall)
+		tmp = dynalloc((*dst)->length + 1, (*dst)->size);
+	else
+		tmp = *dst;
+	if (!tmp)
+		return 0;
+	if (pos && reall)
+		dyn_memmove(tmp->ptr, (*dst)->ptr, --pos);
+	if (tmp->length - pos)
+		dyn_memmove(dynload(tmp, pos + 1), dynload(*dst, pos), (tmp->length - pos) * tmp->size);
+	dyn_memmove(dynload(tmp, pos), value_addr, tmp->size);
+	tmp->cursor = (*dst)->cursor + 1;
+	if (reall)
+	{
+		dyn_free(*dst);
+		*dst = tmp;
+	}
+	return 1;
 }
 
 void	dyn_free(dynarr *tofree)
