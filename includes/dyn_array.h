@@ -15,7 +15,7 @@
 
 # include <stdlib.h>
 
-typedef struct dyn_arr {
+typedef struct s_dynarr {
 	int			size;
 	void		*ptr;
 	int			cursor;
@@ -63,10 +63,10 @@ DECLARE_DYNLOAD(double*, dynloaddp);
 DECLARE_DYNLOAD(long double, dynloadld);
 DECLARE_DYNLOAD(long double*, dynloadldp);
 
-dynarr*			dyn_malloc(int size, unsigned int typesize);
-dynarr*	dyn_realloc(dynarr* arr, unsigned int size);
-inline void		dynsetval(dynarr* arr, long value, unsigned long pos);
-inline void		dynset(dynarr* arr, void* value_addr, unsigned long len, unsigned long pos);
+dynarr*			dynalloc(int size, unsigned int typesize);
+dynarr*			dyn_realloc(dynarr* arr, unsigned int size);
+void			dynsetval(dynarr* arr, long long value, unsigned long pos);
+void			dynset(dynarr* arr, void* value_addr, unsigned long len, unsigned long pos);
 dynarr*			dyncopy(dynarr* arr);
 void			dyn_free(dynarr *tofree);
 

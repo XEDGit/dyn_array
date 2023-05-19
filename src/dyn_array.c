@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "dyn_array.h"
+#include <dyn_array.h>
 
 PROTO_DYNLOADPTR(void*, dynload);
 PROTO_DYNLOAD(short, dynloads);
@@ -64,7 +64,7 @@ static void	*dyn_memmove(void *dest, void *src, size_t len)
 /// @param size 
 /// @param typesize 
 /// @return 
-dynarr*	dyn_malloc(int size, unsigned int typesize)
+dynarr*	dynalloc(int size, unsigned int typesize)
 {
 	dynarr*	ret = malloc(sizeof(dynarr));
 	if (!ret)
@@ -86,7 +86,7 @@ dynarr*	dyn_malloc(int size, unsigned int typesize)
 /// @return Resized arr, on fail it returns 0, sets errno and frees arr
 dynarr*	dyn_realloc(dynarr* arr, unsigned int length)
 {
-	dynarr* ret = dyn_malloc(length, arr->size);
+	dynarr* ret = dynalloc(length, arr->size);
 	if (!ret)
 		return (dyn_free(arr), (dynarr *)0);
 	dyn_memmove(ret->ptr, arr->ptr, arr->size * arr->length);
@@ -98,11 +98,11 @@ dynarr*	dyn_realloc(dynarr* arr, unsigned int length)
 /// @param arr Allocated dynarr*
 /// @param value value to write
 /// @param pos index where to write
-void	dynsetval(dynarr* arr, long value, unsigned long pos)
+inline void	dynsetval(dynarr* arr, long long value, unsigned long pos)
 {
 	if (pos >= arr->length)
 		return ;
-	dyn_memmove(dynload(arr, pos), &value, sizeof(long));
+	dyn_memmove(dynload(arr, pos), &value, arr->size);
 }
 
 /// @brief Copies `len * size of arr data type` bytes from value_addr to arr[pos], use dynsetval for constant values
@@ -110,26 +110,31 @@ void	dynsetval(dynarr* arr, long value, unsigned long pos)
 /// @param value_addr 
 /// @param len 
 /// @param pos 
-void	dynset(dynarr* arr, void* value_addr, unsigned long len, unsigned long pos)
+inline void	dynset(dynarr* arr, void* value_addr, unsigned long len, unsigned long pos)
 {
 	if (pos >= arr->length)
 		return ;
 	dyn_memmove(dynload(arr, pos), value_addr, (arr->size * len));
 }
 
-/// @brief creates a deep-copy of arr
+/// @brief Makes deep-copy of arr
 /// @param arr array to copy
-/// @return deep-copy of arr, on fail returns 0 and sets errno
+/// @return pointer to deep-copy of arr, on fail returns 0 and sets errno
 dynarr*	dyncopy(dynarr* arr)
 {
-	dynarr*	ret = dyn_malloc(arr->length, arr->size);
+	dynarr*	ret = dynalloc(arr->length, arr->size);
 	if (!ret)
 		return ((dynarr *)0);
 	dyn_memmove(ret->ptr, arr->ptr, arr->size * arr->length);
 	return ret;
 }
 
-int	dynadd(dynarr* dst, uintptr_t value)
+/// @brief NOT IMPLEMENTED Inserts an element at dst[pos], reallocating the array if necessary
+/// @param dst destination array
+/// @param value_addr address pointing to the values to be copied
+/// @param pos position in the array to insert the element
+/// @return returns a positive value on success, 0 on error and sets errno
+int	dynadd(dynarr* dst, void* value_addr, unsigned long pos)
 {
 	return 0;
 }
@@ -138,21 +143,4 @@ void	dyn_free(dynarr *tofree)
 {
 	free(tofree->ptr);
 	free(tofree);
-}
-
-typedef struct a {
-	int a;
-	int b;
-} aa;
-
-#include <stdio.h>
-int	main(void)
-{
-	dynarr* in = dyn_malloc(5, sizeof(struct a));
-	for (int i = 0; i < 5; i++)
-	{
-		dynset(in, &(struct a){i, 2}, sizeof(struct a*), i);
-	}
-	for (int i = 0; i < 5; i++)
-		printf("%d %d\n", (*(struct a*)dynload(in, i)).a, (*(struct a*)dynload(in, i)).b);
 }
